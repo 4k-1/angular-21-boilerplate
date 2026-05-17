@@ -4,6 +4,15 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { AccountService } from '../_services/account.service';
 
+const PUBLIC_URLS = [
+  '/authenticate',
+  '/register',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/refresh-token',
+];
+
 @Injectable()
 export class ErrorInterceptor implements HttpInterceptor {
   constructor(private accountService: AccountService) {}
@@ -11,10 +20,15 @@ export class ErrorInterceptor implements HttpInterceptor {
   intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     return next.handle(request).pipe(
       catchError(err => {
-        if ([401, 403].includes(err.status) && this.accountService.accountValue) {
+        const isPublicRoute = PUBLIC_URLS.some(url => request.url.includes(url));
+
+        // Only auto-logout on 401/403 for protected routes when user is logged in
+        if ([401, 403].includes(err.status) && this.accountService.accountValue && !isPublicRoute) {
           this.accountService.logout();
         }
-        const error = err.error?.message || err.statusText;
+
+        // Extract the most useful error message
+        const error = err.error?.message || err.error?.error || err.message || err.statusText || 'An error occurred';
         return throwError(() => error);
       })
     );
